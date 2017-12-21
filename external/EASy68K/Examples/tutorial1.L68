@@ -1,0 +1,112 @@
+00001000 Starting Address
+Assembler used: EASy68K Editor/Assembler v5.15.04
+Created On: 2017-12-20 9:35:24 PM
+
+00000000                             1  *-----------------------------------------------------------
+00000000                             2  * Title         : Tutorial 1 for EASy68k
+00000000                             3  * Written by    : Chuck Kelly
+00000000                             4  * Date Created  : Feb-05-2003
+00000000                             5  * Dec-25-2012 by CK, Uses SIMHALT
+00000000                             6  * Description   : A program that adds two bytes, two words, two long words
+00000000                             7  *                 then displays the results. Demonstrates use of trap #15 for display
+00000000                             8  *                 and subroutine.
+00000000                             9  * 
+00000000                            10  * This program is public domain.
+00000000                            11  *
+00000000                            12  * Note! asterisk '*' in first column for comments
+00000000                            13  *-----------------------------------------------------------
+00000000                            14  * labels must start in first column
+00000000                            15  
+00001000                            16  START   ORG $1000       the program will load into address $1000
+00001000                            17      
+00001000  123C 0003                 18      move.b  #3,d1       put 3 in low byte of data register D1
+00001004  5A01                      19      add.b   #5,d1       add 5 to low byte of data register D1
+00001006                            20  * D1 contains 8 in its low byte
+00001006                            21  
+00001006  343C 0200                 22      move.w  #512,d2     put 512 in low word of data register D2
+0000100A  D441                      23      add.w   d1,d2       add contents of low word in D1 to D2
+0000100C  33C2 0000108A             24      move.w  d2,sum2     write low word of D2 to memory location sum2
+00001012                            25  * D2 contains 520 in its low word (16 bits)
+00001012                            26  
+00001012  263C 000107AC             27      move.l  #67500,d3   put 67,500 in data register D3
+00001018  D679 0000108A             28      add.w   sum2,d3     add contents of sum2 to D3
+0000101E                            29  * D3 contains 68020 as a 32 bit number
+0000101E                            30  
+0000101E                            31  * Display the results in D1
+0000101E  303C 000E                 32      move    #14,d0      load task number into D0
+00001022                            33  * task number 14 is used to display the NULL terminated string at (A1) without new line
+00001022                            34  * see Help/Simulator IO for a complete list of task numbers
+00001022  43F9 0000108C             35      lea     textD1,a1   load address of string to display into A1
+00001028  4E4F                      36      trap    #15         trap #15 activates input/output task
+0000102A                            37  
+0000102A  303C 0003                 38      move    #3,d0       task number 3 into D0
+0000102E                            39  * task number 3 is used to display the contents of D1.L as a number
+0000102E  4E4F                      40      trap    #15         display number in D1.l
+00001030                            41  
+00001030  6100 0042                 42      bsr     newLine
+00001034                            43  
+00001034                            44  * Display D2
+00001034  303C 000E                 45      move    #14,d0      task number 14 (display null string)
+00001038  43F9 0000109A             46      lea     textD2,a1   address of string
+0000103E  4E4F                      47      trap    #15         display it
+00001040  2202                      48      move.l  d2,d1       put d2 into d1
+00001042  303C 0003                 49      move    #3,d0       task number 3 (display number in D0)
+00001046  4E4F                      50      trap    #15         display it
+00001048  6100 002A                 51      bsr     newLine
+0000104C                            52  
+0000104C                            53  * Display D3
+0000104C  303C 000E                 54      move    #14,d0      task number 14 (display null string)
+00001050  43F9 000010A8             55      lea     textD3,a1   address of string
+00001056  4E4F                      56      trap    #15         display it
+00001058  2203                      57      move.l  d3,d1       put d3 into d1
+0000105A  303C 0003                 58      move    #3,d0       task number 3 (display number in D0)
+0000105E  4E4F                      59      trap    #15         display it
+00001060  6100 0012                 60      bsr     newLine
+00001064                            61  
+00001064                            62  * Display end message
+00001064  303C 000E                 63      move    #14,d0      task number 14 (display null string)
+00001068  43F9 000010B6             64      lea     textEnd,a1  address of string
+0000106E  4E4F                      65      trap    #15         display it
+00001070                            66      
+00001070                            67  * Stop execution
+00001070  FFFF FFFF                 68      SIMHALT
+00001074                            69  
+00001074                            70      
+00001074                            71  *------------------------------------
+00001074                            72  * Subroutine to display Carriage Return and Line Feed
+00001074  48E7 8040                 73  newLine movem.l d0/a1,-(a7) push d0 & a1
+00001078  303C 000E                 74      move    #14,d0      task number into D0
+0000107C  43F9 000010C4             75      lea     crlf,a1     address of string
+00001082  4E4F                      76      trap    #15         display return, linefeed
+00001084  4CDF 0201                 77      movem.l (a7)+,d0/a1 restore d0 & a1
+00001088  4E75                      78      rts                 return
+0000108A                            79  
+0000108A                            80  
+0000108A                            81  *------------------------------------
+0000108A                            82  * Variable storage and strings
+0000108A                            83  * ds (define storage) is used to reserve memory for variables
+0000108A                            84  * dc (define constant) is used to place data in memory
+0000108A                            85  sum2    ds.w    1       reserve word of memory for sum2
+0000108C= 44 31 20 63 6F 6E ...     86  textD1  dc.b    'D1 contains: ',0   null terminated string
+0000109A= 44 32 20 63 6F 6E ...     87  textD2  dc.b    'D2 contains: ',0   null terminated string
+000010A8= 44 33 20 63 6F 6E ...     88  textD3  dc.b    'D3 contains: ',0   null terminated string
+000010B6= 50 72 6F 67 72 61 ...     89  textEnd dc.b    'Program End',$d,$a,0   null terminated string
+000010C4= 0D 0A 00                  90  crlf    dc.b    $d,$a,0     carriage return & line feed, null
+000010C7                            91  
+000010C7                            92      END     START   end of program with start address specified
+
+No errors detected
+No warnings generated
+
+
+SYMBOL TABLE INFORMATION
+Symbol-name         Value
+-------------------------
+CRLF                10C4
+NEWLINE             1074
+START               1000
+SUM2                108A
+TEXTD1              108C
+TEXTD2              109A
+TEXTD3              10A8
+TEXTEND             10B6
