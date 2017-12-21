@@ -8,7 +8,7 @@ import (
     //"strings"
     //"time"
     //"unsafe"
-    
+
     "github.com/marcantoinedumais/SegaGenesis/processor"
 )
 
@@ -25,7 +25,11 @@ func main() {
     } else {
         fmt.Println("Could not find a solution for this sudoku.")
     }*/
+
     cpu := processor.Create()
+    fmt.Println("State of processor before execution")
     fmt.Println(cpu.String())
-    cpu.Step()
+    cpu.Run()
+    fmt.Println("State of processor after execution")
+    fmt.Println(cpu.String())
 }
