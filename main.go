@@ -3,7 +3,7 @@ package main
 import (
     "fmt"
     //"io/ioutil"
-    //"os"
+    "os"
     //"strconv"
     //"strings"
     //"time"
@@ -13,21 +13,15 @@ import (
 )
 
 func main() {
-    /*if len(os.Args) == 1 {
-        fmt.Println("Missing sudoku file name. \nUsage: SudokuGo filename")
+    if len(os.Args) == 1 {
+        fmt.Println("Missing binary file name. \nUsage: SegaGenesis filename")
         return
     }
 
-    g := loadGrid(os.Args[1])
-    fmt.Println(g.String())
-    if g.solve() {
-        fmt.Println(g.String())
-    } else {
-        fmt.Println("Could not find a solution for this sudoku.")
-    }*/
-
     cpu := processor.Create()
+    cpu.LoadFile(os.Args[1])    
     fmt.Println("State of processor before execution")
+    fmt.Println(cpu.PrintRom(256))
     fmt.Println(cpu.String())
     cpu.Run()
     fmt.Println("State of processor after execution")
