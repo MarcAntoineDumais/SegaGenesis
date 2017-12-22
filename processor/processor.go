@@ -11,7 +11,7 @@ type cpu struct {
     sr [2]byte          // status register TT, S, M, 0, III, 0, 0, 0, X, N, Z, V, C
     rom [1048576]byte   // 1MB ROM area
     ram [65536]byte     // 64KB RAM area
-    pc uint32           // program counter
+    pc int           // program counter
 }
 
 func Create() (*cpu) {
@@ -19,14 +19,15 @@ func Create() (*cpu) {
     return c
 }
 
-func (c *cpu) Step() bool {
+func (c *cpu) Step() (b bool, err error) {
+    b = true
     i1 := c.rom[c.pc]
     i2 := c.rom[c.pc+1]
     switch i1 & (bit7 | bit6) {
     case 0:
         if (i1 & (bit5 | bit4)) == 0 {
-            return true
-        } else { //MOVE instruction
+            return
+        } else { // MOVE instruction
             size := opsize(2, (i1 & bit5) != 0, (i1 & bit4) != 0)
             dm, dr := addressingmode((i1 & bit0) != 0, (i2 & bit7) != 0, (i2 & bit6) != 0,
                                     (i1 & bit3) != 0, (i1 & bit2) != 0, (i1 & bit1) != 0)
@@ -43,21 +44,36 @@ func (c *cpu) Step() bool {
                 for i := 0; i < size; i++ {
                     tmp[i] = c.a[sr][4-size+i]
                 }
+            case 11: //immediate
+                if size == 1 {
+                    tmp[0] = c.rom[c.pc+3]
+                    c.pc += 2
+                } else {
+                    for i := 0; i < size; i++ {
+                        tmp[i] = c.rom[c.pc+2+i]
+                    }
+                    c.pc += size
+                }
             }
+            
 
             switch dm {
             case 0:
                 for i := 0; i < size; i++ {
                     c.d[dr][4-size+i] = tmp[i]
                 }
-            case 1:
+            case 1: // MOVEA instruction
+                if size == 1 {
+                    err = c.error("MOVEA cannot handle size 1")
+                    return
+                }
                 for i := 0; i < size; i++ {
                     c.a[dr][4-size+i] = tmp[i]
                 }
             }
 
-            c.sr[1] &= ^bit7
-            c.sr[1] &= ^bit6
+            c.sr[1] &= ^bit0
+            c.sr[1] &= ^bit1
             var zero, negative bool
             switch size {
             case 1:
@@ -74,35 +90,40 @@ func (c *cpu) Step() bool {
                 negative = int32(val) < 0
             }
             if zero {
-                c.sr[1] &= ^bit4
-                c.sr[1] |= bit5
+                c.sr[1] &= ^bit3
+                c.sr[1] |= bit2
             } else if negative {
-                c.sr[1] &= ^bit5
-                c.sr[1] |= bit4
+                c.sr[1] &= ^bit2
+                c.sr[1] |= bit3
             }
         }
     case bit6:
-        return true
+        return
     case bit7:
-        return true
+        return
     case bit6 | bit7:
         if (i1 & bit5) != 0 {
-            return true
+            return
         } else {
             if (i1 & bit4) != 0 { //ADD instruction
-                return true
+                return
 
             } else {
-                return true
+                return
             }
         }
     }
 
     c.pc += 2
-    return false
-    //fmt.Printf("%T: %b\n%T: %b\n%T: %b", bit0, bit0, bit2, bit2, bit7, bit7)
+    b = false
+    return
 }
 
-func (c *cpu) Run() {
-    for !c.Step(){}
+func (c *cpu) Run() error {
+    var err error
+    b := false
+    for !b {
+        b, err = c.Step()
+    }
+    return err
 }

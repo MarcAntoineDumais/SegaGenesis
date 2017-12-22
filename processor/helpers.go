@@ -1,9 +1,15 @@
 package processor
 
 import (
+    "errors"
     "fmt"
     "io/ioutil"
 )
+
+func (c *cpu) error(s string) error {
+    s = fmt.Sprintf("CPU error at address %d: %s", c.pc, s)
+    return errors.New(s)
+}
 
 func (c *cpu) LoadFile(filename string) error {
     /*f, err := os.Open(filename)
@@ -22,13 +28,21 @@ func (c *cpu) LoadFile(filename string) error {
 
 func (c *cpu) String() string {
     return fmt.Sprintf("d: %s\na: %s\nsr: %s\npc: %v\nnext instruction: %4x",
-                        formatRegisters(c.d), formatRegisters(c.a), formatBytes(c.sr[:]), c.pc, c.rom[c.pc:c.pc+2])
+                        formatRegisters(c.d), formatRegisters(c.a), formatBytesBin(c.sr[:]), c.pc, c.rom[c.pc:c.pc+2])
 }
 
-func formatBytes(b []byte) string {
+func formatBytesHex(b []byte) string {
     s := "["
     for i := range b {
-        s += fmt.Sprintf("%2x ", b[i])
+        s += fmt.Sprintf("%02x ", b[i])
+    }
+    return s[:len(s)-1] + "]"
+}
+
+func formatBytesBin(b []byte) string {
+    s := "["
+    for i := range b {
+        s += fmt.Sprintf("%08b ", b[i])
     }
     return s[:len(s)-1] + "]"
 }
@@ -36,7 +50,7 @@ func formatBytes(b []byte) string {
 func formatRegisters(r [8][4]byte) string {
     s := "["
     for i := 0; i < 8; i++ {
-        s += fmt.Sprintf("%d", i) + formatBytes(r[i][:]) + " "
+        s += fmt.Sprintf("%d", i) + formatBytesHex(r[i][:]) + " "
     }
     return s[:len(s)-1] + "]"
 }
