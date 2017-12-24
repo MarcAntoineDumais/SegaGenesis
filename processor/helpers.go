@@ -1,6 +1,7 @@
 package processor
 
 import (
+    "encoding/binary"
     "errors"
     "fmt"
     "io/ioutil"
@@ -136,25 +137,100 @@ func addressingmode(m1, m2, m3, x1, x2, x3 bool) (mode, register int) {
             }
         }
     } else {
-        mode = 0
-        if x1 {
-            register += 4
-        }
-        if x2 {
-            register += 2
-        }
-        if x3 {
-            register += 1
-        }
-        if m1 {
-            mode += 4
-        }
-        if m2 {
-            mode += 2
-        }
-        if m3 {
-            mode += 1
-        }
+        mode = bits3ToInt(m1, m2, m3)
+        register = bits3ToInt(x1, x2, x3)
     }
     return
+}
+
+/* Converts 3 bits to int
+   Used for getting a register index
+*/
+func bits3ToInt(b1, b2, b3 bool) int {
+    register := 0
+    if b1 {
+        register += 4
+    }
+    if b2 {
+        register += 2
+    }
+    if b3 {
+        register += 1
+    }
+    return register
+}
+
+/* Converts 4 bits to int
+   Used for getting a condition mode
+    Condition 0: T True
+    Condition 1: F False
+    Condition 2: HI Higher
+    Condition 3: LS Lower or Same
+    Condition 4: CC Carry Clear
+    Condition 5: CS Carry Set
+    Condition 6: NE Not Equal
+    Condition 7: EQ Equal
+    Condition 8: VC Overflow Clear
+    Condition 9: VS Overflow Set
+    Condition 10: PL Plus
+    Condition 11: MI Minus
+    Condition 12: GE Greater or Equal
+    Condition 13: LT Less Than
+    Condition 14: GT Greater Than
+    Condition 15: LE Less or Equal
+*/
+func bits4ToInt(c1, c2, c3, c4 bool) int {
+    condition := 0
+    if c1 {
+        condition += 8
+    }
+    if c2 {
+        condition += 4
+    }
+    if c3 {
+        condition += 2
+    }
+    if c4 {
+        condition += 1
+    }
+    return condition
+}
+
+func readBytes(b []byte, n int) interface{} {
+    switch n {
+        case 1:
+            return uint8(b[0])
+        case 2:
+            return binary.BigEndian.Uint16(b[:n])
+        case 4:
+            return binary.BigEndian.Uint32(b[:n])
+    }
+    return nil
+}
+
+func isbitset(i, mask byte) bool {
+    return (i & mask) != 0
+}
+
+func parseByte(b byte) []bool {
+    bits := make([]bool, 8)
+    for i := range bits {
+        bits[i] = (b & uint8(1 << uint(i))) != 0
+    }
+    return bits
+}
+
+func addByte(a, b byte, x bool) (result byte, overflow, carry bool) {
+    result = a+b
+    signA := isbitset(a, bit7)
+    signB := isbitset(b, bit7)
+    signResult := isbitset(result, bit7)
+    overflow =  (signA && signB && !signResult) || (!signA && !signB && signResult)
+    carry = (result < a || result < b)
+
+    return
+}
+
+func add(a, b []byte, n size) (result []byte, overflow, carry bool) {
+
 }
