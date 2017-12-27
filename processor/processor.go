@@ -29,27 +29,57 @@ func (c *cpu) Step() (b bool, err error) {
                 return
             } else {
                 if i1[4] { //ADD instruction
-                    //register := bits3ToInt(i1[3], i1[2], i1[1])
+                    register := bits3ToInt(i1[3], i1[2], i1[1])
                     if i2[7] && i2[6] { //ADDA
                         //size := opsize(1, i1[0], false)
                         //TODO
                     } else {
-                        //size := opsize(0, i2[7], i2[6])
+                        size := opsize(0, i2[7], i2[6])
                         toData := i1[0]
-                        if toData && !i2[5] && !i2[4] {
-                            //ADDX
-                            
+                        if toData {
+                            if !i2[5] && !i2[4] {
+                                //ADDX
+                            } else {
+                                //ADD
+                                sm, sr := addressingmode(i2[5], i2[4], i2[3],
+                                                         i2[2], i2[1], i2[0])
+                                tmp := make([]byte, size)
+                                switch sm {
+                                case 0:
+                                    for i := 0; i < size; i++ {
+                                        tmp[i] = c.d[sr][4-size+i]
+                                    }
+                                case 1:
+                                    for i := 0; i < size; i++ {
+                                        tmp[i] = c.a[sr][4-size+i]
+                                    }
+                                default:
+                                 err = c.error("ADD Unexpected addressing mode")
+                                 return
+                                }
+                                
+                                overflow, carry := addTo(c.d[register][:], tmp, size, false)
+                                c.sr[1]
+                                if zero {
+                                    c.sr[1] &= ^bit3
+                                    c.sr[1] |= bit2
+                                } else if negative {
+                                    c.sr[1] &= ^bit2
+                                    c.sr[1] |= bit3
+                                }
+                                X — Set the same as the carry bit.
+                                N — Set if the result is negative; cleared otherwise.
+                                Z — Set if the result is zero; cleared otherwise.
+                                V — Set if an overflow is generated; cleared otherwise.
+                                C — Set if a carry is generated; cleared otherwise.
+                            }
                         } else {
                             //ADD
-                            //eam, ear := addressingmode(i2[5], i2[4], i2[3],
-                            //                           i2[2], i2[1], i2[0])
+                            dm, dr := addressingmode(i2[5], i2[4], i2[3],
+                                                     i2[2], i2[1], i2[0])
                             
-                            switch 0/*eam*/ {
-                            case 0:
-                                //source := readBytes(c.d[ear][:], size)
-                                
-                            case 1:
-                            
+                            switch dm {
+                            //
                             default:
                                 err = c.error("ADD Unexpected addressing mode")
                                 return
@@ -119,25 +149,10 @@ func (c *cpu) Step() (b bool, err error) {
 
                 c.sr[1] &= ^bit0
                 c.sr[1] &= ^bit1
-                var zero, negative bool
-                switch size {
-                case 1:
-                    val := tmp[0]
-                    zero = val == 0
-                    negative = int8(val) < 0
-                case 2:
-                    val := binary.BigEndian.Uint16(tmp)
-                    zero = val == 0
-                    negative = int16(val) < 0
-                case 4:
-                    val := binary.BigEndian.Uint32(tmp)
-                    zero = val == 0
-                    negative = int32(val) < 0
-                }
-                if zero {
+                if isZero(tmp) {
                     c.sr[1] &= ^bit3
                     c.sr[1] |= bit2
-                } else if negative {
+                } else if isNegative(tmp) {
                     c.sr[1] &= ^bit2
                     c.sr[1] |= bit3
                 }

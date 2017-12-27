@@ -23,7 +23,7 @@ func (c *cpu) LoadFile(filename string) error {
     for i := range b {
         c.rom[i] = b[i]
     }
-    
+
     return e
 }
 
@@ -222,6 +222,9 @@ func parseByte(b byte) []bool {
 
 func addByte(a, b byte, x bool) (result byte, overflow, carry bool) {
     result = a+b
+    if x {
+        result++
+    }
     signA := isbitset(a, bit7)
     signB := isbitset(b, bit7)
     signResult := isbitset(result, bit7)
@@ -231,6 +234,28 @@ func addByte(a, b byte, x bool) (result byte, overflow, carry bool) {
     return
 }
 
-func add(a, b []byte, n size) (result []byte, overflow, carry bool) {
+func addTo(d, s []byte, n int, x bool) (overflow, carry bool) {
+    ld := len(d)
+    ls := len(s)
+    d[ld-1], overflow, carry = addByte(d[ld-1], s[ls-1], x)
+    for i := 0; i < n-1; i++ {
+        d[ld-2-i], overflow, carry = addByte(d[ld-2-i], s[ls-2-i], carry)
+    }
+    // test behavior on simulator. What happens if carry bit creates overflow in out-of-scope byte
+    if carry && n < ld {
+        d[ld-1-n], _, carry = addByte(d[ld-1-n], 0, true)
+    }
+    return
+}
 
+func isZero(b []byte) {
+    combined := byte(0)
+    for _, v := range b {
+        combined |= v
+    }
+    return combined == 0
+}
+
+func isNegative(b []byte) {
+    return isbitset(b[0], bit7)
 }
