@@ -35,54 +35,59 @@ func (c *cpu) Step() (b bool, err error) {
                         //TODO
                     } else {
                         size := opsize(0, i2[7], i2[6])
-                        toData := i1[0]
-                        if toData {
+                        if i1[0] { // Direction to <ea>
                             if !i2[5] && !i2[4] {
                                 //ADDX
                             } else {
                                 //ADD
-                                sm, sr := addressingmode(i2[5], i2[4], i2[3],
+                                dm, dr := addressingmode(i2[5], i2[4], i2[3],
                                                          i2[2], i2[1], i2[0])
-                                tmp := make([]byte, size)
-                                switch sm {
-                                case 0:
-                                    for i := 0; i < size; i++ {
-                                        tmp[i] = c.d[sr][4-size+i]
-                                    }
-                                case 1:
-                                    for i := 0; i < size; i++ {
-                                        tmp[i] = c.a[sr][4-size+i]
-                                    }
-                                default:
-                                 err = c.error("ADD Unexpected addressing mode")
-                                 return
-                                }
                                 
-                                overflow, carry := addTo(c.d[register][:], tmp, size, false)
-                                c.sr[1]
-                                if zero {
-                                    c.sr[1] &= ^bit3
-                                    c.sr[1] |= bit2
-                                } else if negative {
-                                    c.sr[1] &= ^bit2
-                                    c.sr[1] |= bit3
+                                switch dm {
+                                //
+                                default:
+                                    err = c.error("ADD Unexpected addressing mode")
+                                    return
                                 }
-                                X — Set the same as the carry bit.
-                                N — Set if the result is negative; cleared otherwise.
-                                Z — Set if the result is zero; cleared otherwise.
-                                V — Set if an overflow is generated; cleared otherwise.
-                                C — Set if a carry is generated; cleared otherwise.
                             }
-                        } else {
+                        } else { // Direction to Dn
                             //ADD
-                            dm, dr := addressingmode(i2[5], i2[4], i2[3],
+                            sm, sr := addressingmode(i2[5], i2[4], i2[3],
                                                      i2[2], i2[1], i2[0])
-                            
-                            switch dm {
-                            //
+                            tmp := make([]byte, size)
+                            switch sm {
+                            case 0:
+                                for i := 0; i < size; i++ {
+                                    tmp[i] = c.d[sr][4-size+i]
+                                }
+                            case 1:
+                                for i := 0; i < size; i++ {
+                                    tmp[i] = c.a[sr][4-size+i]
+                                }
                             default:
-                                err = c.error("ADD Unexpected addressing mode")
-                                return
+                             err = c.error("ADD Unexpected addressing mode")
+                             return
+                            }
+                            
+                            overflow, carry := addTo(c.d[register][:], tmp, size, false)
+                            if carry {
+                                c.sr[1] |= bit0
+                                c.sr[1] |= bit4
+                            } else {
+                                c.sr[1] &= ^bit0
+                                c.sr[1] &= ^bit4
+                            }
+                            if overflow {
+                                c.sr[1] |= bit1
+                            } else {
+                                c.sr[1] &= ^bit1
+                            }
+                            if isZero(tmp) {
+                                c.sr[1] &= ^bit3
+                                c.sr[1] |= bit2
+                            } else if isNegative(tmp) {
+                                c.sr[1] &= ^bit2
+                                c.sr[1] |= bit3
                             }
                         }
                     }
@@ -95,7 +100,11 @@ func (c *cpu) Step() (b bool, err error) {
         }
     } else {
         if i1[6] {
-            return
+            if c.rom[c.pc] == 0x4e && c.rom[c.pc+1] == 0x71 {
+                //NOP
+            } else {
+                return
+            }
         } else {
             if !i1[5] && !i1[4] {
                 return
