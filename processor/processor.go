@@ -115,6 +115,7 @@ func (c *cpu) Step() (b bool, err error) {
                 sm, sr := addressingmode(i2[5], i2[4], i2[3],
                                          i2[2], i2[1], i2[0])
 
+                extraBytes := bytesUsedByAddressing(dm, size)
                 tmp := make([]byte, size)
                 switch sm {
                 case 0:
@@ -125,15 +126,50 @@ func (c *cpu) Step() (b bool, err error) {
                     for i := 0; i < size; i++ {
                         tmp[i] = c.a[sr][4-size+i]
                     }
+                case 2:
+                    address := readBytes(c.a[sr][:], 4)
+                    for i := 0; i < size; i++ {
+                        tmp[i] = c.ram[address + i]
+                    }
+                case 3:
+                    address := readBytes(c.a[sr][:], 4)
+                    for i := 0; i < size; i++ {
+                        tmp[i] = c.ram[address + i]
+                    }
+                    increment(c.a[sr][:], size)
+                case 4:
+                    increment(c.a[sr][:], -size)
+                    address := readBytes(c.a[sr][:], 4)
+                    for i := 0; i < size; i++ {
+                        tmp[i] = c.ram[address + i]
+                    }
+                case 5:
+                    address := readBytes(c.a[sr][:], 4)
+                    address += binary.Uint16(c.rom[c.pc+extraBytes+2:c.pc+extraBytes+4])
+                    for i := 0; i < size; i++ {
+                        tmp[i] = c.ram[address + i]
+                    }
+                case 6:
+                    //address with index
+                case 7:
+                    inc := readBytes(c.rom[c.pc+extraBytes:c.pc+extraBytes+2], 2)
+                    address := c.pc + int(signExtend2to4(inc))
+                    for i := 0; i < size; i++ {
+                        tmp[i] = c.ram[address + i]
+                    }
+                case 8:
+                    //PC with index
+                case 9:
+                    //absolute short
+                case 10:
+                    //absolute long
                 case 11: //immediate
                     if size == 1 {
-                        tmp[0] = c.rom[c.pc+3]
-                        c.pc += 2
+                        tmp[0] = c.rom[c.pc+extraBytes+3]
                     } else {
                         for i := 0; i < size; i++ {
-                            tmp[i] = c.rom[c.pc+2+i]
+                            tmp[i] = c.rom[c.pc+extraBytes+2+i]
                         }
-                        c.pc += size
                     }
                 }
                 
@@ -165,6 +201,8 @@ func (c *cpu) Step() (b bool, err error) {
                     c.sr[1] &= ^bit2
                     c.sr[1] |= bit3
                 }
+                
+                c.pc += extraBytes + bytesUsedByAddressing(sm, size)
             }
         }
     }

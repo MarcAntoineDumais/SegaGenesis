@@ -248,6 +248,21 @@ func addTo(d, s []byte, n int, x bool) (overflow, carry bool) {
     return
 }
 
+func increment(b []byte, n int) {
+    switch len(b) {
+    case 1:
+        b[0] += byte(n)
+    case 2:
+        tmp := binary.Uint16(b)
+        tmp += uint16(n)
+        binary.PutUint16(b, tmp)
+    case 4:
+        tmp := binary.Uint32(b)
+        tmp += uint32(n)
+        binary.PutUint32(b, tmp)
+    }
+}
+
 func isZero(b []byte) {
     combined := byte(0)
     for _, v := range b {
@@ -258,4 +273,44 @@ func isZero(b []byte) {
 
 func isNegative(b []byte) {
     return isbitset(b[0], bit7)
+}
+
+func bytesUsedByAddressing(mode, size int) int {
+    if (mode >= 5 && mode <= 9) {
+        return 2
+    } else if mode == 10 {
+        return 4
+    } else if mode == 11 {
+        if size == 4 {
+            return 4
+        } else {
+            return 2
+        }
+    } else {
+        return 0
+    }
+}
+
+func signExtend2to4(x uint16) uint32 {
+    if isbitset(x, wbit15) {
+        return uint32(x) + uint32(0xffff0000)
+    } else {
+        return uint32(x)
+    }
+}
+
+func signExtend1to2(x uint8) uint16 {
+    if isbitset(x, bit7) {
+        return uint16(x) + uint16(0xff00)
+    } else {
+        return uint16(x)
+    }
+}
+
+func signExtend1to4(x uint8) uint32 {
+    if isbitset(x, bit7) {
+        return uint32(x) + uint32(0xffffff00)
+    } else {
+        return uint32(x)
+    }
 }
