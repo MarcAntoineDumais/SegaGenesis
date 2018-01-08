@@ -150,7 +150,25 @@ func (c *cpu) Step() (b bool, err error) {
                         tmp[i] = c.ram[address + i]
                     }
                 case 6:
-                    //address with index
+                    data, register, word := parse8bitDisplacement(c.rom[c.pc+extraBytes+2])
+                    address := readBytes(c.a[sr][:], 4)
+                    if data {
+                        if word {
+                            address += signExtend2to4(readBytes(c.d[register][2:4], 2))
+                        } else {
+                            address += readBytes(c.d[register][:], 4)
+                        }
+                    } else {
+                        if word {
+                            address += signExtend2to4(readBytes(c.a[register][2:4], 2))
+                        } else {
+                            address += readBytes(c.a[register][:], 4)
+                        }
+                    }
+                    address += int(c.rom[c.pc+extraBytes+3])
+                    for i := 0; i < size; i++ {
+                        tmp[i] = c.ram[address + i]
+                    }
                 case 7:
                     inc := readBytes(c.rom[c.pc+extraBytes:c.pc+extraBytes+2], 2)
                     address := c.pc + int(signExtend2to4(inc))
@@ -158,12 +176,36 @@ func (c *cpu) Step() (b bool, err error) {
                         tmp[i] = c.ram[address + i]
                     }
                 case 8:
-                    //PC with index
+                    data, register, word := parse8bitDisplacement(c.rom[c.pc+extraBytes+2])
+                    address := c.pc
+                    if data {
+                        if word {
+                            address += signExtend2to4(readBytes(c.d[register][2:4], 2))
+                        } else {
+                            address += readBytes(c.d[register][:], 4)
+                        }
+                    } else {
+                        if word {
+                            address += signExtend2to4(readBytes(c.a[register][2:4], 2))
+                        } else {
+                            address += readBytes(c.a[register][:], 4)
+                        }
+                    }
+                    address += int(c.rom[c.pc+extraBytes+3])
+                    for i := 0; i < size; i++ {
+                        tmp[i] = c.ram[address + i]
+                    }
                 case 9:
-                    //absolute short
+                    address := int(signExtend2to4(readBytes(c.rom[c.pc+extraBytes:c.pc+extraBytes+2], 2)))
+                    for i := 0; i < size; i++ {
+                        tmp[i] = c.ram[address + i]
+                    }
                 case 10:
-                    //absolute long
-                case 11: //immediate
+                    address := int(readBytes(c.rom[c.pc+extraBytes:c.pc+extraBytes+4], 4))
+                    for i := 0; i < size; i++ {
+                        tmp[i] = c.ram[address + i]
+                    }
+                case 11:
                     if size == 1 {
                         tmp[0] = c.rom[c.pc+extraBytes+3]
                     } else {
@@ -187,8 +229,61 @@ func (c *cpu) Step() (b bool, err error) {
                     for i := 0; i < size; i++ {
                         c.a[dr][4-size+i] = tmp[i]
                     }
+                case 2:
+                    address := readBytes(c.a[dr][:], 4)
+                    for i := 0; i < size; i++ {
+                        c.ram[address + i] = tmp[i]
+                    }
+                case 3:
+                    address := readBytes(c.a[dr][:], 4)
+                    for i := 0; i < size; i++ {
+                        c.ram[address + i] = tmp[i]
+                    }
+                    increment(c.a[dr][:], size)
+                case 4:
+                    increment(c.a[dr][:], -size)
+                    address := readBytes(c.a[dr][:], 4)
+                    for i := 0; i < size; i++ {
+                        c.ram[address + i] = tmp[i]
+                    }
+                case 5:
+                    address := readBytes(c.a[dr][:], 4)
+                    address += binary.Uint16(c.rom[c.pc+2:c.pc+4])
+                    for i := 0; i < size; i++ {
+                        c.ram[address + i] = tmp[i]
+                    }
+                case 6:
+                    data, register, word := parse8bitDisplacement(c.rom[c.pc+2])
+                    address := readBytes(c.a[dr][:], 4)
+                    if data {
+                        if word {
+                            address += signExtend2to4(readBytes(c.d[register][2:4], 2))
+                        } else {
+                            address += readBytes(c.d[register][:], 4)
+                        }
+                    } else {
+                        if word {
+                            address += signExtend2to4(readBytes(c.a[register][2:4], 2))
+                        } else {
+                            address += readBytes(c.a[register][:], 4)
+                        }
+                    }
+                    address += int(c.rom[c.pc+3])
+                    for i := 0; i < size; i++ {
+                        c.ram[address + i] = tmp[i]
+                    }
+                case 9:
+                    address := int(signExtend2to4(readBytes(c.rom[c.pc:c.pc+2], 2)))
+                    for i := 0; i < size; i++ {
+                        c.ram[address + i] = tmp[i]
+                    }
+                case 10:
+                    address := int(readBytes(c.rom[c.pc:c.pc+4], 4))
+                    for i := 0; i < size; i++ {
+                        c.ram[address + i] = tmp[i]
+                    }
                 default:
-                    err = c.error("MOVE Unexpected addressing mode")
+                    err = c.error("Can only MOVE to data alterable addressing modes")
                     return
                 }
 

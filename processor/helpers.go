@@ -314,3 +314,10 @@ func signExtend1to4(x uint8) uint32 {
         return uint32(x)
     }
 }
+
+func parse8bitDisplacement(b byte) (data bool, register int, word bool) {
+    data = !isbitset(b, bit7)
+    word = !isbitset(b, bit3)
+    register = bits3ToInt(isbitset(b, bit6), isbitset(b, bit5), isbitset(b, bit4))
+    return
+}
