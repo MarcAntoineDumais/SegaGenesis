@@ -38,36 +38,82 @@ func (c *cpu) Step() (b bool, err error) {
                         if i1[0] { // Direction to <ea>
                             if !i2[5] && !i2[4] {
                                 //ADDX
+                                //TODO
                             } else {
                                 //ADD
                                 dm, dr := addressingmode(i2[5], i2[4], i2[3],
                                                          i2[2], i2[1], i2[0])
-                                
+                                var overflow, carry
                                 switch dm {
-                                //
+                                case 2:
+                                    address := readBytes(c.a[dr][:], 4)
+                                    overflow, carry = addTo(c.ram[address:address+size], c.d[register][:], size, false)
+                                case 3:
+                                    address := readBytes(c.a[dr][:], 4)
+                                    overflow, carry = addTo(c.ram[address:address+size], c.d[register][:], size, false)
+                                    increment(c.a[dr][:], size)
+                                case 4:
+                                    increment(c.a[dr][:], -size)
+                                    address := readBytes(c.a[dr][:], 4)
+                                    overflow, carry = addTo(c.ram[address:address+size], c.d[register][:], size, false)
+                                case 5:
+                                    address := readBytes(c.a[dr][:], 4)
+                                    address += binary.Uint16(c.rom[c.pc+2:c.pc+4])
+                                    overflow, carry = addTo(c.ram[address:address+size], c.d[register][:], size, false)
+                                case 6:
+                                    data, reg, word := parse8bitDisplacement(c.rom[c.pc+2])
+                                    address := readBytes(c.a[dr][:], 4)
+                                    if data {
+                                        if word {
+                                            address += signExtend2to4(readBytes(c.d[reg][2:4], 2))
+                                        } else {
+                                            address += readBytes(c.d[reg][:], 4)
+                                        }
+                                    } else {
+                                        if word {
+                                            address += signExtend2to4(readBytes(c.a[reg][2:4], 2))
+                                        } else {
+                                            address += readBytes(c.a[reg][:], 4)
+                                        }
+                                    }
+                                    address += int(c.rom[c.pc+3])
+                                    overflow, carry = addTo(c.ram[address:address+size], c.d[register][:], size, false)
+                                case 9:
+                                    address := int(signExtend2to4(readBytes(c.rom[c.pc:c.pc+2], 2)))
+                                    overflow, carry = addTo(c.ram[address:address+size], c.d[register][:], size, false)
+                                case 10:
+                                    address := int(readBytes(c.rom[c.pc:c.pc+4], 4))
+                                    overflow, carry = addTo(c.ram[address:address+size], c.d[register][:], size, false)
                                 default:
-                                    err = c.error("ADD Unexpected addressing mode")
+                                    err = c.error("Can only ADD to memory alterable addressing mode")
                                     return
+                                }
+                                
+                                if carry {
+                                    c.sr[1] |= bit0
+                                    c.sr[1] |= bit4
+                                } else {
+                                    c.sr[1] &= ^bit0
+                                    c.sr[1] &= ^bit4
+                                }
+                                if overflow {
+                                    c.sr[1] |= bit1
+                                } else {
+                                    c.sr[1] &= ^bit1
+                                }
+                                if isZero(tmp) {
+                                    c.sr[1] &= ^bit3
+                                    c.sr[1] |= bit2
+                                } else if isNegative(tmp) {
+                                    c.sr[1] &= ^bit2
+                                    c.sr[1] |= bit3
                                 }
                             }
                         } else { // Direction to Dn
                             //ADD
                             sm, sr := addressingmode(i2[5], i2[4], i2[3],
                                                      i2[2], i2[1], i2[0])
-                            tmp := make([]byte, size)
-                            switch sm {
-                            case 0:
-                                for i := 0; i < size; i++ {
-                                    tmp[i] = c.d[sr][4-size+i]
-                                }
-                            case 1:
-                                for i := 0; i < size; i++ {
-                                    tmp[i] = c.a[sr][4-size+i]
-                                }
-                            default:
-                             err = c.error("ADD Unexpected addressing mode")
-                             return
-                            }
+                            tmp := loadByAddressing(sm, sr, size, 0)
                             
                             overflow, carry := addTo(c.d[register][:], tmp, size, false)
                             if carry {
@@ -103,10 +149,12 @@ func (c *cpu) Step() (b bool, err error) {
             if c.rom[c.pc] == 0x4e && c.rom[c.pc+1] == 0x71 {
                 //NOP
             } else {
+                //ADDQ somewhere here
                 return
             }
         } else {
             if !i1[5] && !i1[4] {
+                //ADDI somewhere here
                 return
             } else { // MOVE instruction
                 size := opsize(2, i1[5], i1[4])
@@ -116,105 +164,7 @@ func (c *cpu) Step() (b bool, err error) {
                                          i2[2], i2[1], i2[0])
 
                 extraBytes := bytesUsedByAddressing(dm, size)
-                tmp := make([]byte, size)
-                switch sm {
-                case 0:
-                    for i := 0; i < size; i++ {
-                        tmp[i] = c.d[sr][4-size+i]
-                    }
-                case 1:
-                    for i := 0; i < size; i++ {
-                        tmp[i] = c.a[sr][4-size+i]
-                    }
-                case 2:
-                    address := readBytes(c.a[sr][:], 4)
-                    for i := 0; i < size; i++ {
-                        tmp[i] = c.ram[address + i]
-                    }
-                case 3:
-                    address := readBytes(c.a[sr][:], 4)
-                    for i := 0; i < size; i++ {
-                        tmp[i] = c.ram[address + i]
-                    }
-                    increment(c.a[sr][:], size)
-                case 4:
-                    increment(c.a[sr][:], -size)
-                    address := readBytes(c.a[sr][:], 4)
-                    for i := 0; i < size; i++ {
-                        tmp[i] = c.ram[address + i]
-                    }
-                case 5:
-                    address := readBytes(c.a[sr][:], 4)
-                    address += binary.Uint16(c.rom[c.pc+extraBytes+2:c.pc+extraBytes+4])
-                    for i := 0; i < size; i++ {
-                        tmp[i] = c.ram[address + i]
-                    }
-                case 6:
-                    data, register, word := parse8bitDisplacement(c.rom[c.pc+extraBytes+2])
-                    address := readBytes(c.a[sr][:], 4)
-                    if data {
-                        if word {
-                            address += signExtend2to4(readBytes(c.d[register][2:4], 2))
-                        } else {
-                            address += readBytes(c.d[register][:], 4)
-                        }
-                    } else {
-                        if word {
-                            address += signExtend2to4(readBytes(c.a[register][2:4], 2))
-                        } else {
-                            address += readBytes(c.a[register][:], 4)
-                        }
-                    }
-                    address += int(c.rom[c.pc+extraBytes+3])
-                    for i := 0; i < size; i++ {
-                        tmp[i] = c.ram[address + i]
-                    }
-                case 7:
-                    inc := readBytes(c.rom[c.pc+extraBytes:c.pc+extraBytes+2], 2)
-                    address := c.pc + int(signExtend2to4(inc))
-                    for i := 0; i < size; i++ {
-                        tmp[i] = c.ram[address + i]
-                    }
-                case 8:
-                    data, register, word := parse8bitDisplacement(c.rom[c.pc+extraBytes+2])
-                    address := c.pc
-                    if data {
-                        if word {
-                            address += signExtend2to4(readBytes(c.d[register][2:4], 2))
-                        } else {
-                            address += readBytes(c.d[register][:], 4)
-                        }
-                    } else {
-                        if word {
-                            address += signExtend2to4(readBytes(c.a[register][2:4], 2))
-                        } else {
-                            address += readBytes(c.a[register][:], 4)
-                        }
-                    }
-                    address += int(c.rom[c.pc+extraBytes+3])
-                    for i := 0; i < size; i++ {
-                        tmp[i] = c.ram[address + i]
-                    }
-                case 9:
-                    address := int(signExtend2to4(readBytes(c.rom[c.pc+extraBytes:c.pc+extraBytes+2], 2)))
-                    for i := 0; i < size; i++ {
-                        tmp[i] = c.ram[address + i]
-                    }
-                case 10:
-                    address := int(readBytes(c.rom[c.pc+extraBytes:c.pc+extraBytes+4], 4))
-                    for i := 0; i < size; i++ {
-                        tmp[i] = c.ram[address + i]
-                    }
-                case 11:
-                    if size == 1 {
-                        tmp[0] = c.rom[c.pc+extraBytes+3]
-                    } else {
-                        for i := 0; i < size; i++ {
-                            tmp[i] = c.rom[c.pc+extraBytes+2+i]
-                        }
-                    }
-                }
-                
+                tmp := loadByAddressing(sm, sr, size, extraBytes)
 
                 switch dm {
                 case 0:

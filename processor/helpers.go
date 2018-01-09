@@ -13,12 +13,6 @@ func (c *cpu) error(s string) error {
 }
 
 func (c *cpu) LoadFile(filename string) error {
-    /*f, err := os.Open(filename)
-    if err != nil {
-        return err
-    }
-    defer f.Close()
-    */
     b, e := ioutil.ReadFile(filename)
     for i := range b {
         c.rom[i] = b[i]
@@ -86,7 +80,7 @@ func opsize(mode int, b1, b2 bool) int {
         } else {
             return 2
         }
-    default:
+    case 2:
         if b1 {
             if b2 {
                 return 2
@@ -98,7 +92,7 @@ func opsize(mode int, b1, b2 bool) int {
         }
     }
 
-    return 1
+    return -1
 }
 
 /*
@@ -320,4 +314,106 @@ func parse8bitDisplacement(b byte) (data bool, register int, word bool) {
     word = !isbitset(b, bit3)
     register = bits3ToInt(isbitset(b, bit6), isbitset(b, bit5), isbitset(b, bit4))
     return
+}
+
+func loadByAddressing(mode, register, size, extraBytes int) []byte {
+    tmp := make([]byte, size)
+    switch mode {
+    case 0:
+        for i := 0; i < size; i++ {
+            tmp[i] = c.d[register][4-size+i]
+        }
+    case 1:
+        for i := 0; i < size; i++ {
+            tmp[i] = c.a[register][4-size+i]
+        }
+    case 2:
+        address := readBytes(c.a[register][:], 4)
+        for i := 0; i < size; i++ {
+            tmp[i] = c.ram[address + i]
+        }
+    case 3:
+        address := readBytes(c.a[register][:], 4)
+        for i := 0; i < size; i++ {
+            tmp[i] = c.ram[address + i]
+        }
+        increment(c.a[register][:], size)
+    case 4:
+        increment(c.a[register][:], -size)
+        address := readBytes(c.a[register][:], 4)
+        for i := 0; i < size; i++ {
+            tmp[i] = c.ram[address + i]
+        }
+    case 5:
+        address := readBytes(c.a[register][:], 4)
+        address += binary.Uint16(c.rom[c.pc+extraBytes+2:c.pc+extraBytes+4])
+        for i := 0; i < size; i++ {
+            tmp[i] = c.ram[address + i]
+        }
+    case 6:
+        data, reg, word := parse8bitDisplacement(c.rom[c.pc+extraBytes+2])
+        address := readBytes(c.a[register][:], 4)
+        if data {
+            if word {
+                address += signExtend2to4(readBytes(c.d[reg][2:4], 2))
+            } else {
+                address += readBytes(c.d[reg][:], 4)
+            }
+        } else {
+            if word {
+                address += signExtend2to4(readBytes(c.a[reg][2:4], 2))
+            } else {
+                address += readBytes(c.a[reg][:], 4)
+            }
+        }
+        address += int(c.rom[c.pc+extraBytes+3])
+        for i := 0; i < size; i++ {
+            tmp[i] = c.ram[address + i]
+        }
+    case 7:
+        inc := readBytes(c.rom[c.pc+extraBytes:c.pc+extraBytes+2], 2)
+        address := c.pc + int(signExtend2to4(inc))
+        for i := 0; i < size; i++ {
+            tmp[i] = c.ram[address + i]
+        }
+    case 8:
+        data, reg, word := parse8bitDisplacement(c.rom[c.pc+extraBytes+2])
+        address := c.pc
+        if data {
+            if word {
+                address += signExtend2to4(readBytes(c.d[reg][2:4], 2))
+            } else {
+                address += readBytes(c.d[reg][:], 4)
+            }
+        } else {
+            if word {
+                address += signExtend2to4(readBytes(c.a[reg][2:4], 2))
+            } else {
+                address += readBytes(c.a[reg][:], 4)
+            }
+        }
+        address += int(c.rom[c.pc+extraBytes+3])
+        for i := 0; i < size; i++ {
+            tmp[i] = c.ram[address + i]
+        }
+    case 9:
+        address := int(signExtend2to4(readBytes(c.rom[c.pc+extraBytes:c.pc+extraBytes+2], 2)))
+        for i := 0; i < size; i++ {
+            tmp[i] = c.ram[address + i]
+        }
+    case 10:
+        address := int(readBytes(c.rom[c.pc+extraBytes:c.pc+extraBytes+4], 4))
+        for i := 0; i < size; i++ {
+            tmp[i] = c.ram[address + i]
+        }
+    case 11:
+        if size == 1 {
+            tmp[0] = c.rom[c.pc+extraBytes+3]
+        } else {
+            for i := 0; i < size; i++ {
+                tmp[i] = c.rom[c.pc+extraBytes+2+i]
+            }
+        }
+    }
+    return tmp
 }

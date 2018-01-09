@@ -1,5 +1,3 @@
 -ADD
--NOP
--More addressing modes
 -JMP
 -Bcc
