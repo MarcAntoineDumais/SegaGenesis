@@ -1,6 +1,7 @@
 package processor
 
 import (
+    "encoding/binary"
     "errors"
     "fmt"
     "io/ioutil"
@@ -12,17 +13,11 @@ func (c *cpu) error(s string) error {
 }
 
 func (c *cpu) LoadFile(filename string) error {
-    /*f, err := os.Open(filename)
-    if err != nil {
-        return err
-    }
-    defer f.Close()
-    */
     b, e := ioutil.ReadFile(filename)
     for i := range b {
         c.rom[i] = b[i]
     }
-    
+
     return e
 }
 
@@ -85,7 +80,7 @@ func opsize(mode int, b1, b2 bool) int {
         } else {
             return 2
         }
-    default:
+    case 2:
         if b1 {
             if b2 {
                 return 2
@@ -97,7 +92,7 @@ func opsize(mode int, b1, b2 bool) int {
         }
     }
 
-    return 1
+    return -1
 }
 
 /*
@@ -136,25 +131,197 @@ func addressingmode(m1, m2, m3, x1, x2, x3 bool) (mode, register int) {
             }
         }
     } else {
-        mode = 0
-        if x1 {
-            register += 4
-        }
-        if x2 {
-            register += 2
-        }
-        if x3 {
-            register += 1
-        }
-        if m1 {
-            mode += 4
-        }
-        if m2 {
-            mode += 2
-        }
-        if m3 {
-            mode += 1
-        }
+        mode = bits3ToInt(m1, m2, m3)
+        register = bits3ToInt(x1, x2, x3)
     }
+    return
+}
+
+/* Converts 3 bits to int
+   Used for getting a register index
+*/
+func bits3ToInt(b1, b2, b3 bool) int {
+    register := 0
+    if b1 {
+        register += 4
+    }
+    if b2 {
+        register += 2
+    }
+    if b3 {
+        register += 1
+    }
+    return register
+}
+
+/* Converts 4 bits to int
+   Used for getting a condition mode
+    Condition 0: T True
+    Condition 1: F False
+    Condition 2: HI Higher
+    Condition 3: LS Lower or Same
+    Condition 4: CC Carry Clear
+    Condition 5: CS Carry Set
+    Condition 6: NE Not Equal
+    Condition 7: EQ Equal
+    Condition 8: VC Overflow Clear
+    Condition 9: VS Overflow Set
+    Condition 10: PL Plus
+    Condition 11: MI Minus
+    Condition 12: GE Greater or Equal
+    Condition 13: LT Less Than
+    Condition 14: GT Greater Than
+    Condition 15: LE Less or Equal
+*/
+func bits4ToInt(c1, c2, c3, c4 bool) int {
+    condition := 0
+    if c1 {
+        condition += 8
+    }
+    if c2 {
+        condition += 4
+    }
+    if c3 {
+        condition += 2
+    }
+    if c4 {
+        condition += 1
+    }
+    return condition
+}
+
+/*func readBytes(b []byte, n int) interface{} {
+    switch n {
+        case 1:
+            return b[0]
+        case 2:
+            return binary.BigEndian.Uint16(b[:n])
+        case 4:
+            return binary.BigEndian.Uint32(b[:n])
+    }
+    return nil
+}*/
+
+func read2Bytes(b []byte) uint16 {
+    return binary.BigEndian.Uint16(b[:2])
+}
+
+func read4Bytes(b []byte) uint32 {
+    return binary.BigEndian.Uint32(b[:4])
+}
+
+func isbitset(i, mask byte) bool {
+    return (i & mask) != 0
+}
+
+func parseByte(b byte) []bool {
+    bits := make([]bool, 8)
+    for i := range bits {
+        bits[i] = (b & uint8(1 << uint(i))) != 0
+    }
+    return bits
+}
+
+func addByte(a, b byte, x bool) (result byte, overflow, carry bool) {
+    result = a+b
+    if x {
+        result++
+    }
+    signA := isbitset(a, bit7)
+    signB := isbitset(b, bit7)
+    signResult := isbitset(result, bit7)
+    overflow =  (signA && signB && !signResult) || (!signA && !signB && signResult)
+    carry = (result < a || result < b)
+
+    return
+}
+
+func addTo(d, s []byte, n int, x bool) (overflow, carry bool) {
+    ld := len(d)
+    ls := len(s)
+    d[ld-1], overflow, carry = addByte(d[ld-1], s[ls-1], x)
+    for i := 0; i < n-1; i++ {
+        d[ld-2-i], overflow, carry = addByte(d[ld-2-i], s[ls-2-i], carry)
+    }
+    // test behavior on simulator. What happens if carry bit creates overflow in out-of-scope byte
+    if carry && n < ld {
+        d[ld-1-n], _, carry = addByte(d[ld-1-n], 0, true)
+    }
+    return
+}
+
+func increment(b []byte, n int) {
+    switch len(b) {
+    case 1:
+        b[0] += byte(n)
+    case 2:
+        tmp := binary.BigEndian.Uint16(b)
+        tmp += uint16(n)
+        binary.BigEndian.PutUint16(b, tmp)
+    case 4:
+        tmp := binary.BigEndian.Uint32(b)
+        tmp += uint32(n)
+        binary.BigEndian.PutUint32(b, tmp)
+    }
+}
+
+func isZero(b []byte) bool {
+    combined := byte(0)
+    for _, v := range b {
+        combined |= v
+    }
+    return combined == 0
+}
+
+func isNegative(b []byte) bool {
+    return isbitset(b[0], bit7)
+}
+
+func bytesUsedByAddressing(mode, size int) int {
+    if (mode >= 5 && mode <= 9) {
+        return 2
+    } else if mode == 10 {
+        return 4
+    } else if mode == 11 {
+        if size == 4 {
+            return 4
+        } else {
+            return 2
+        }
+    } else {
+        return 0
+    }
+}
+
+func signExtend2to4(x uint16) uint32 {
+    tmp := make([]byte, 2)
+    binary.BigEndian.PutUint16(tmp, x)
+    if isbitset(tmp[0], bit7) {
+        return uint32(x) + uint32(0xffff0000)
+    } else {
+        return uint32(x)
+    }
+}
+
+func signExtend1to2(x uint8) uint16 {
+    if isbitset(x, bit7) {
+        return uint16(x) + uint16(0xff00)
+    } else {
+        return uint16(x)
+    }
+}
+
+func signExtend1to4(x uint8) uint32 {
+    if isbitset(x, bit7) {
+        return uint32(x) + uint32(0xffffff00)
+    } else {
+        return uint32(x)
+    }
+}
+
+func parse8bitDisplacement(b byte) (data bool, register int, word bool) {
+    data = !isbitset(b, bit7)
+    word = !isbitset(b, bit3)
+    register = bits3ToInt(isbitset(b, bit6), isbitset(b, bit5), isbitset(b, bit4))
     return
 }

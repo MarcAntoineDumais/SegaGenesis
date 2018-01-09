@@ -1,6 +1,3 @@
--immediate addressing mode
--testing framework for each instruction
 -ADD
--NOP
 -JMP
 -Bcc
