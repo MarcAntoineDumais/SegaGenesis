@@ -190,16 +190,24 @@ func bits4ToInt(c1, c2, c3, c4 bool) int {
     return condition
 }
 
-func readBytes(b []byte, n int) interface{} {
+/*func readBytes(b []byte, n int) interface{} {
     switch n {
         case 1:
-            return uint8(b[0])
+            return b[0]
         case 2:
             return binary.BigEndian.Uint16(b[:n])
         case 4:
             return binary.BigEndian.Uint32(b[:n])
     }
     return nil
+}*/
+
+func read2Bytes(b []byte) uint16 {
+    return binary.BigEndian.Uint16(b[:2])
+}
+
+func read4Bytes(b []byte) uint32 {
+    return binary.BigEndian.Uint32(b[:4])
 }
 
 func isbitset(i, mask byte) bool {
@@ -247,17 +255,17 @@ func increment(b []byte, n int) {
     case 1:
         b[0] += byte(n)
     case 2:
-        tmp := binary.Uint16(b)
+        tmp := binary.BigEndian.Uint16(b)
         tmp += uint16(n)
-        binary.PutUint16(b, tmp)
+        binary.BigEndian.PutUint16(b, tmp)
     case 4:
-        tmp := binary.Uint32(b)
+        tmp := binary.BigEndian.Uint32(b)
         tmp += uint32(n)
-        binary.PutUint32(b, tmp)
+        binary.BigEndian.PutUint32(b, tmp)
     }
 }
 
-func isZero(b []byte) {
+func isZero(b []byte) bool {
     combined := byte(0)
     for _, v := range b {
         combined |= v
@@ -265,7 +273,7 @@ func isZero(b []byte) {
     return combined == 0
 }
 
-func isNegative(b []byte) {
+func isNegative(b []byte) bool {
     return isbitset(b[0], bit7)
 }
 
@@ -286,7 +294,9 @@ func bytesUsedByAddressing(mode, size int) int {
 }
 
 func signExtend2to4(x uint16) uint32 {
-    if isbitset(x, wbit15) {
+    tmp := make([]byte, 2)
+    binary.BigEndian.PutUint16(tmp, x)
+    if isbitset(tmp[0], bit7) {
         return uint32(x) + uint32(0xffff0000)
     } else {
         return uint32(x)
@@ -314,106 +324,4 @@ func parse8bitDisplacement(b byte) (data bool, register int, word bool) {
     word = !isbitset(b, bit3)
     register = bits3ToInt(isbitset(b, bit6), isbitset(b, bit5), isbitset(b, bit4))
     return
-}
-
-func loadByAddressing(mode, register, size, extraBytes int) []byte {
-    tmp := make([]byte, size)
-    switch mode {
-    case 0:
-        for i := 0; i < size; i++ {
-            tmp[i] = c.d[register][4-size+i]
-        }
-    case 1:
-        for i := 0; i < size; i++ {
-            tmp[i] = c.a[register][4-size+i]
-        }
-    case 2:
-        address := readBytes(c.a[register][:], 4)
-        for i := 0; i < size; i++ {
-            tmp[i] = c.ram[address + i]
-        }
-    case 3:
-        address := readBytes(c.a[register][:], 4)
-        for i := 0; i < size; i++ {
-            tmp[i] = c.ram[address + i]
-        }
-        increment(c.a[register][:], size)
-    case 4:
-        increment(c.a[register][:], -size)
-        address := readBytes(c.a[register][:], 4)
-        for i := 0; i < size; i++ {
-            tmp[i] = c.ram[address + i]
-        }
-    case 5:
-        address := readBytes(c.a[register][:], 4)
-        address += binary.Uint16(c.rom[c.pc+extraBytes+2:c.pc+extraBytes+4])
-        for i := 0; i < size; i++ {
-            tmp[i] = c.ram[address + i]
-        }
-    case 6:
-        data, reg, word := parse8bitDisplacement(c.rom[c.pc+extraBytes+2])
-        address := readBytes(c.a[register][:], 4)
-        if data {
-            if word {
-                address += signExtend2to4(readBytes(c.d[reg][2:4], 2))
-            } else {
-                address += readBytes(c.d[reg][:], 4)
-            }
-        } else {
-            if word {
-                address += signExtend2to4(readBytes(c.a[reg][2:4], 2))
-            } else {
-                address += readBytes(c.a[reg][:], 4)
-            }
-        }
-        address += int(c.rom[c.pc+extraBytes+3])
-        for i := 0; i < size; i++ {
-            tmp[i] = c.ram[address + i]
-        }
-    case 7:
-        inc := readBytes(c.rom[c.pc+extraBytes:c.pc+extraBytes+2], 2)
-        address := c.pc + int(signExtend2to4(inc))
-        for i := 0; i < size; i++ {
-            tmp[i] = c.ram[address + i]
-        }
-    case 8:
-        data, reg, word := parse8bitDisplacement(c.rom[c.pc+extraBytes+2])
-        address := c.pc
-        if data {
-            if word {
-                address += signExtend2to4(readBytes(c.d[reg][2:4], 2))
-            } else {
-                address += readBytes(c.d[reg][:], 4)
-            }
-        } else {
-            if word {
-                address += signExtend2to4(readBytes(c.a[reg][2:4], 2))
-            } else {
-                address += readBytes(c.a[reg][:], 4)
-            }
-        }
-        address += int(c.rom[c.pc+extraBytes+3])
-        for i := 0; i < size; i++ {
-            tmp[i] = c.ram[address + i]
-        }
-    case 9:
-        address := int(signExtend2to4(readBytes(c.rom[c.pc+extraBytes:c.pc+extraBytes+2], 2)))
-        for i := 0; i < size; i++ {
-            tmp[i] = c.ram[address + i]
-        }
-    case 10:
-        address := int(readBytes(c.rom[c.pc+extraBytes:c.pc+extraBytes+4], 4))
-        for i := 0; i < size; i++ {
-            tmp[i] = c.ram[address + i]
-        }
-    case 11:
-        if size == 1 {
-            tmp[0] = c.rom[c.pc+extraBytes+3]
-        } else {
-            for i := 0; i < size; i++ {
-                tmp[i] = c.rom[c.pc+extraBytes+2+i]
-            }
-        }
-    }
-    return tmp
 }
