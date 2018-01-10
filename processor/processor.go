@@ -332,7 +332,7 @@ func (c *cpu) loadByAddressing(mode, register, size, extraBytes int) []byte {
         inc := int(signExtend2to4(read2Bytes(c.rom[c.pc+extraBytes:c.pc+extraBytes+2])))
         address := c.pc + inc
         for i := 0; i < size; i++ {
-            tmp[i] = c.ram[address + i]
+            tmp[i] = c.rom[address + i]
         }
     case 8:
         data, reg, word := parse8bitDisplacement(c.rom[c.pc+extraBytes+2])
@@ -352,7 +352,7 @@ func (c *cpu) loadByAddressing(mode, register, size, extraBytes int) []byte {
         }
         address += int(c.rom[c.pc+extraBytes+3])
         for i := 0; i < size; i++ {
-            tmp[i] = c.ram[address + i]
+            tmp[i] = c.rom[address + i]
         }
     case 9:
         address := int(signExtend2to4(read2Bytes(c.rom[c.pc+extraBytes:c.pc+extraBytes+2])))

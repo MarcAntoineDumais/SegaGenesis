@@ -14,6 +14,16 @@ func TestMove(t *testing.T) {
         MOVE.W D0,D2
         MOVE.W A0,A2
         MOVE.W #$0,D3
+        
+        MOVE.W (A0),
+        MOVE.W (A0)+,
+        MOVE.W -(A0),
+        MOVE.W (10,A0),
+        MOVE.W (10,A0,D1),        
+        MOVE.W ($FFFE,PC),
+        MOVE.L #$3,D6
+        MOVE.B ($FFFB,PC,D6),
+        MOVE.W ($)
     */
     c.LoadFile("tests/move.bin")
     e := c.Run()
